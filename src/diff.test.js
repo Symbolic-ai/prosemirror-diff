@@ -63,35 +63,20 @@ describe('diffWordsWithDetail', () => {
     ])
   })
 
-  it('should detect single word change with character detail', () => {
-    // JSON5 -> JSON6: should show character-level diff within the word
+  it('should highlight a replacement as whole words', () => {
     const diff = diffWordsWithDetail('JSON5', 'JSON6')
-
-    // Should have: "JSON" unchanged, "5" deleted, "6" inserted
-    const unchanged = diff.filter(d => d.type === DiffType.Unchanged)
-    const deleted = diff.filter(d => d.type === DiffType.Deleted)
-    const inserted = diff.filter(d => d.type === DiffType.Inserted)
-
-    expect(unchanged.map(d => d.text).join('')).toBe('JSON')
-    expect(deleted.map(d => d.text).join('')).toBe('5')
-    expect(inserted.map(d => d.text).join('')).toBe('6')
-
-    // Character-level changes should have level: 'char'
-    expect(deleted.every(d => d.level === 'char')).toBe(true)
-    expect(inserted.every(d => d.level === 'char')).toBe(true)
+    expect(diff).toEqual([
+      { type: DiffType.Deleted, text: 'JSON5', level: 'word' },
+      { type: DiffType.Inserted, text: 'JSON6', level: 'word' }
+    ])
   })
 
-  it('should detect word replacement with character detail (JSONB -> JOHN)', () => {
+  it('should keep word replacements separate without interleaving', () => {
     const diff = diffWordsWithDetail('JSONB', 'JOHN')
-
-    // Should show: J (unchanged), S (deleted), O (unchanged), N (unchanged), B (deleted), H (inserted)
-    const unchanged = diff.filter(d => d.type === DiffType.Unchanged)
-    const deleted = diff.filter(d => d.type === DiffType.Deleted)
-    const inserted = diff.filter(d => d.type === DiffType.Inserted)
-
-    expect(unchanged.map(d => d.text).join('')).toBe('JON')
-    expect(deleted.map(d => d.text).join('')).toBe('SB')
-    expect(inserted.map(d => d.text).join('')).toBe('H')
+    expect(diff).toEqual([
+      { type: DiffType.Deleted, text: 'JSONB', level: 'word' },
+      { type: DiffType.Inserted, text: 'JOHN', level: 'word' }
+    ])
   })
 
   it('should handle word insertion', () => {
@@ -181,25 +166,13 @@ describe('diffWordsWithDetail', () => {
   })
 
   it('should handle sentence with similar words', () => {
-    // "The JSON5 format" -> "The JSON6 format"
     const diff = diffWordsWithDetail('The JSON5 format', 'The JSON6 format')
-
-    const unchanged = diff.filter(d => d.type === DiffType.Unchanged)
-    const deleted = diff.filter(d => d.type === DiffType.Deleted)
-    const inserted = diff.filter(d => d.type === DiffType.Inserted)
-
-    // "The ", "JSON", " format" should be unchanged
-    expect(unchanged.map(d => d.text).join('')).toContain('The ')
-    expect(unchanged.map(d => d.text).join('')).toContain('JSON')
-    expect(unchanged.map(d => d.text).join('')).toContain(' format')
-
-    // Only "5" deleted and "6" inserted
-    expect(deleted.map(d => d.text).join('')).toBe('5')
-    expect(inserted.map(d => d.text).join('')).toBe('6')
-
-    // These are character-level changes within the JSON5/JSON6 word
-    expect(deleted.every(d => d.level === 'char')).toBe(true)
-    expect(inserted.every(d => d.level === 'char')).toBe(true)
+    expect(diff).toEqual([
+      { type: DiffType.Unchanged, text: 'The ', level: 'word' },
+      { type: DiffType.Deleted, text: 'JSON5', level: 'word' },
+      { type: DiffType.Inserted, text: 'JSON6', level: 'word' },
+      { type: DiffType.Unchanged, text: ' format', level: 'word' }
+    ])
   })
 
   it('should include level attribute in all diff results', () => {
@@ -244,6 +217,29 @@ const createTestSchema = () => {
 
 describe('diffEditor integration', () => {
   const schema = createTestSchema()
+
+
+  it.each(['word', 'char'])('preserves both texts through a long %s diff with empty segments', (level) => {
+    const before = "word24 word2 word11 word25 word19 word1 word3 word5 word15 word5 word18 word6 word21 word20 word10 word19 word7 word13 word10 word8 word14 word11 word25 word11 word17 word22 word7 word11 word11 word28 word14 word29 word29 word20 word15 word27 word23 word14 word17 word29 word12 word0 word24 word18 word17 word6 word13 word29 word18 word8 word22"
+    const after = "word21 word9 word9 word22 word14 word20 word9 word16 word6 word0 word16 word23 word3 word10 word7 word0 word6 word21 word1 word19 word7 word8 word14 word11 word25 word11 word17 word22 word7 word11 word11 word28 word14 word29 word29 word20 word15 word29 word23 word17 word29 word12 word7 word24 word18 word17 word6 word13 word29 word18 word8"
+    const document = text => schema.node('doc', null, [
+      schema.node('paragraph', null, [schema.text(text)])
+    ]).toJSON()
+    const result = diffEditor(schema, document(before), document(after), { level })
+    const oldText = []
+    const newText = []
+
+    result.descendants(node => {
+      if (!node.isText) return
+      const type = node.marks.find(mark => mark.type.name === 'diffMark')?.attrs.type ?? DiffType.Unchanged
+      if (type !== DiffType.Inserted) oldText.push(node.text)
+      if (type !== DiffType.Deleted) newText.push(node.text)
+    })
+
+    expect(oldText.join('')).toBe(before)
+    expect(newText.join('')).toBe(after)
+    result.check()
+  })
 
   it('should work with level: char (character-level diff)', () => {
     const oldDoc = {
@@ -403,9 +399,8 @@ describe('diffEditor integration', () => {
 
     expect(diffMarks.length).toBeGreaterThan(0)
 
-    // Character-level changes should have level: 'char'
     diffMarks.forEach(mark => {
-      expect(mark.attrs.level).toBe('char')
+      expect(mark.attrs.level).toBe('word')
     })
   })
 

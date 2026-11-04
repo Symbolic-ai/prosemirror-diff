@@ -16,9 +16,10 @@ Fork chain:
 - [`hamflx/prosemirror-diff`](https://github.com/hamflx/prosemirror-diff) — the original.
 - [`alexgaribay/prosemirror-diff`](https://github.com/alexgaribay/prosemirror-diff) — added
   word-level diffing (see below). This fork was made from tag `v0.0.11`.
-- **`Symbolic-ai/prosemirror-diff`** (this repo) — an ownership/governance fork. It carries **no
-  source changes** of its own; it exists so the dependency is pinned to a repo Symbolic controls.
-  The Symbolic monorepo consumes it pinned to an immutable commit SHA.
+- **`Symbolic-ai/prosemirror-diff`** (this repo) — maintained by Symbolic and consumed by the
+  monorepo at an immutable commit SHA. It skips zero-length diff segments before constructing
+  ProseMirror text nodes: `diff-match-patch` can emit these during line-mode cleanup, while
+  ProseMirror rejects empty text nodes.
 
 MIT licensed, per the upstream `package.json`. Attribution to the original author (`hamflx`) and
 the fork author (Alex Garibay) is preserved.
