@@ -279,15 +279,11 @@ export const patchTextNodes = (schema, oldNode, newNode, options = {}) => {
   // Use word-level diff or character-level diff based on option
   const diff = level === 'word'
     ? diffWordsWithDetail(oldText, newText)
-    : new diff_match_patch().diff_main(oldText, newText)
+    : new diff_match_patch().diff_main(oldText, newText).map(([type, text]) => ({ type, text, level: 'char' }))
   let oldLen = 0
   let newLen = 0
-  const res = diff.map(d => {
-    // Handle both formats: object {type, text, level} or tuple [type, text]
-    const type = d.type !== undefined ? d.type : d[0]
-    const content = d.text !== undefined ? d.text : d[1]
-    // For character-level diff (tuple format), default to 'char' level
-    const level = d.level || 'char'
+  // diff-match-patch's line-mode cleanup can leave zero-length changes.
+  const res = diff.filter(({ text }) => text.length > 0).map(({ type, text: content, level }) => {
     const marks = type !== DiffType.Unchanged ? createDiffMark(schema, type, level) : []
     const node = createTextNode(schema, content, marks)
     const oldFrom = oldLen

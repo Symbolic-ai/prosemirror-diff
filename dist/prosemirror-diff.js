@@ -213,13 +213,10 @@ const patchTextNodes = (schema, oldNode, newNode, options = {}) => {
   const { level = "char" } = options;
   const oldText = oldNode.map((n) => getNodeText(n)).join("");
   const newText = newNode.map((n) => getNodeText(n)).join("");
-  const diff = level === "word" ? diffWordsWithDetail(oldText, newText) : new diff_match_patch().diff_main(oldText, newText);
+  const diff = level === "word" ? diffWordsWithDetail(oldText, newText) : new diff_match_patch().diff_main(oldText, newText).map(([type, text]) => ({ type, text, level: "char" }));
   let oldLen = 0;
   let newLen = 0;
-  const res = diff.map((d) => {
-    const type = d.type !== void 0 ? d.type : d[0];
-    const content = d.text !== void 0 ? d.text : d[1];
-    const level2 = d.level || "char";
+  const res = diff.filter(({ text }) => text.length > 0).map(({ type, text: content, level: level2 }) => {
     const marks = type !== DiffType.Unchanged ? createDiffMark(schema, type, level2) : [];
     const node = createTextNode(schema, content, marks);
     const oldFrom = oldLen;
